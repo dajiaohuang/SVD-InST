@@ -197,13 +197,13 @@ if __name__ == "__main__":
 	model = load_model_from_config(config, f"{ckpt}")
 	sampler = DDIMSampler(model)
 
-	model.embedding_manager.load('./logs/mural2023-12-14T16-09-02_mural/checkpoints/embeddings.pt')
+	model.embedding_manager.load('logs/embeddings.pt')
 
 	for module in model.model.diffusion_model.modules():
     		if hasattr(module, "perform_svd"):
         		module.perform_svd()
 
-	model.model.diffusion_model.state_dict=torch.load('/lustre/home/acct-stu/stu045/InST/logs/mural2023-12-24T14-16-23_mural/checkpoints/model.pt')
+	model.model.diffusion_model.state_dict=torch.load('logs/model.pt')
 
 	model = model.to(device)
 	if (len(sys.argv)) != 2:
