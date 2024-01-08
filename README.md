@@ -1,5 +1,5 @@
 <div id="top"></div>
-## SVD-InST
+# SVD-InST
 
 Final Project for AI3603-SJTU
 ![teaser](./Images/result1.png)
