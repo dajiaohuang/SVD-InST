@@ -46,16 +46,24 @@ For packages, see environment.yaml.
 
    See `configs/stable-diffusion/v1-finetune.yaml` for more options
 
-   Download the pretrained [Stable Diffusion Model](https://huggingface.co/CompVis/stable-diffusion-v-1-4-original/resolve/main/sd-v1-4.ckpt) and save it at ./models/sd/sd-v1-4.ckpt.
+   Download the pretrained [Stable Diffusion Model](https://huggingface.co/CompVis/stable-diffusion-v-1-4-original/resolve/main/sd-v1-4.ckpt) and save it at `./models/sd/sd-v1-4.ckpt`.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
 ### Test
 
-   To generate new images, run svdInST1.py
+To use our checkpoint, download `model.pt` and add it to the directory `./logs`.
+
+To generate 10 images for each image in a directory, run svdInST1.py
 
 ```sh
 python svdInST1.py /path/to/directory/with/test/content/images
+```
+
+To generate 1 images for a test image, run svdInST.py
+
+```sh
+python svdInST.py
 ```
 
 
