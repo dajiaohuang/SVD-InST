@@ -1,6 +1,6 @@
 # SVD-InST
 
-SVD-InST is a style transfer project built on top of Stable Diffusion and latent diffusion components. This repository was created for the AI3603 course project at Shanghai Jiao Tong University.
+SVD-InST is a style transfer project built on top of Stable Diffusion. The method combines the image-conditioned personalization idea from InST with the singular-value finetuning strategy of SVDiff, and was developed as the final project for AI3603 at Shanghai Jiao Tong University.
 
 ![SVD-InST overview](./Images/SVD-InST.png)
 
@@ -9,7 +9,7 @@ Additional sample results:
 ![Result 1](./Images/result1.png)
 ![Result 2](./Images/result2.png)
 
-For the full method description, see `Report.pdf`.
+For the original project report and presentation material, see `17_苏展_吴舒文_运嘉盛.pdf` and `Report.pdf`.
 
 ## Overview
 
@@ -19,6 +19,39 @@ The repository contains:
 - inference scripts for generating stylized images from content images
 - configuration files for finetuning and inference
 - example figures used in the project report
+
+## Method summary
+
+According to the project report, SVD-InST is designed to improve style transfer quality by combining two ideas:
+
+1. **InST-style conditioning**: use a learned placeholder token and image-aware conditioning to inject style information into the text/image generation pipeline.
+2. **SVDiff-style parameterization**: decompose pretrained weights with SVD and optimize lightweight singular-value updates instead of fully finetuning the whole diffusion model.
+
+In this repository, that design is reflected by:
+
+- `ldm.modules.embedding_manager.EmbeddingManager`, which learns the style-related embedding used with the placeholder token `*`
+- `SVDmodel.py`, which defines SVD-based layers such as `SVDConv2d` and `SVDLinear`
+- `configs/v1-finetune-svdiff.yaml`, which switches the UNet to the SVD-based implementation for finetuning
+
+The goal is to keep the strong generation prior of Stable Diffusion while improving style faithfulness and preserving content structure.
+
+## Experimental results
+
+The report compares SVD-InST against several style transfer baselines, including InST, CycleGAN, StyTR-2, and fast-style-transfer.
+
+![Quantitative and qualitative comparison](./Images/comparison_data.png)
+
+Reported quantitative results from the project report:
+
+| Model | FID | LPIPS |
+| --- | ---: | ---: |
+| InST | 127.5 | 0.53 |
+| CycleGAN | 178.3 | - |
+| StyTR-2 | 171.3 | - |
+| fast-style-transfer | 172.7 | - |
+| SVD-InST (ours) | **125.1** | **0.54** |
+
+Lower FID indicates better distributional quality. The report shows that SVD-InST achieves the best FID among the compared methods while keeping LPIPS at a level similar to or slightly better than InST.
 
 ## Repository layout
 
@@ -106,6 +139,7 @@ Notes:
 - images are resized to `512 x 512` during preprocessing
 - captions are generated automatically with the placeholder token `*`
 - the training command passes the image folder through `--data_root`
+- the project follows the personalized-style setup from the report, so a small folder of style-domain images is sufficient for finetuning
 
 ## Training
 
@@ -128,6 +162,13 @@ Useful related configs:
 
 Training outputs are written under `logs/`.
 
+During training, the code saves the learned textual embedding and the finetuned diffusion weights separately. In practice, the artifacts you will usually need later are:
+
+```text
+logs/embeddings.pt
+logs/model.pt
+```
+
 ## Inference
 
 ### Batch generation for a directory of content images
@@ -146,6 +187,8 @@ This script:
 - expects `logs/model.pt`
 - writes results under `outputs/img2img-samples/`
 
+The batch script generates multiple outputs for each input content image, matching the evaluation workflow described in the report.
+
 ### Single-image example
 
 For a single content image workflow, use `svdinst.py`.
@@ -155,6 +198,8 @@ Before running it, review the hard-coded paths inside the script and update them
 - the content image path
 - the style image path
 - the checkpoint locations
+
+At inference time, the pipeline loads the embedding checkpoint, applies `perform_svd()` to the SVD-based modules, and then restores the finetuned model weights before sampling.
 
 ### Notebook workflow
 
@@ -168,7 +213,8 @@ If you prefer an interactive workflow, `InST.ipynb` contains a notebook version 
 
 ## Demo and report
 
-- Report: `Report.pdf`
+- Project report: `17_苏展_吴舒文_运嘉盛.pdf`
+- Additional report file: `Report.pdf`
 - Demo video: https://www.bilibili.com/video/BV1hg4y1r7z4
 
 ## License
