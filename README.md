@@ -1,6 +1,12 @@
 # SVD-InST
 
-SVD-InST is a style transfer project built on top of Stable Diffusion. The method combines the image-conditioned personalization idea from InST with the singular-value finetuning strategy of SVDiff, and was developed as the final project for AI3603 at Shanghai Jiao Tong University.
+SVD-InST is a style transfer project built on top of Stable Diffusion. The method combines the image-conditioned personalization idea from InST with the singular-value fine-tuning strategy of SVDiff, and was developed as the final project for AI3603 at Shanghai Jiao Tong University.
+
+## Authors
+
+- Wu Shuwen - 521030910087 - mike0510@sjtu.edu.cn
+- Su Zhan - 521030910112 - ililaoban@sjtu.edu.cn
+- Yun Jiasheng - 521030910093 - yjs180303@sjtu.edu.cn
 
 ![SVD-InST overview](./Images/SVD-InST.png)
 
@@ -11,7 +17,13 @@ Additional sample results:
 
 For the original project report and presentation material, see `17_苏展_吴舒文_运嘉盛.pdf` and `Report.pdf`.
 
-## Overview
+## Abstract
+
+We proposed SVD-InST, a model for image-to-image translation with generative models. The target task is to translate realistic photo images into mural-style paintings using the provided dataset. Our approach combines textual inversion for style alignment and singular-value fine-tuning for compact adaptation of Stable Diffusion. The design keeps the pretrained generative prior of Stable Diffusion while specializing the model to a single artistic transfer task.
+
+## Task
+
+This project targets **Problem-4: image-to-image translation with generative models**, where the input domain is realistic photographs and the target domain is **Nine-Colored Mural style** artwork.
 
 The repository contains:
 
@@ -22,18 +34,64 @@ The repository contains:
 
 ## Method summary
 
-According to the project report, SVD-InST is designed to improve style transfer quality by combining two ideas:
+According to the report, SVD-InST combines two ideas:
 
-1. **InST-style conditioning**: use a learned placeholder token and image-aware conditioning to inject style information into the text/image generation pipeline.
-2. **SVDiff-style parameterization**: decompose pretrained weights with SVD and optimize lightweight singular-value updates instead of fully finetuning the whole diffusion model.
+1. **InST-style conditioning**: learn a placeholder token and image-aware embedding so that the target artistic style can be represented in the Stable Diffusion conditioning space.
+2. **SVDiff-style fine-tuning**: decompose pretrained weights with SVD and optimize only singular-value updates instead of fully fine-tuning the whole diffusion model.
 
 In this repository, that design is reflected by:
 
 - `ldm.modules.embedding_manager.EmbeddingManager`, which learns the style-related embedding used with the placeholder token `*`
-- `SVDmodel.py`, which defines SVD-based layers such as `SVDConv2d` and `SVDLinear`
-- `configs/v1-finetune-svdiff.yaml`, which switches the UNet to the SVD-based implementation for finetuning
+- `SVDmodel.py`, which defines SVD-based layers such as `SVDConv2d`, `SVDLinear`, `SVDEmbedding`, and normalization layers with trainable spectral shifts
+- `configs/v1-finetune-svdiff.yaml`, which switches the UNet to the SVD-based implementation for fine-tuning
 
-The goal is to keep the strong generation prior of Stable Diffusion while improving style faithfulness and preserving content structure.
+The overall goal is to preserve the strong generation prior of Stable Diffusion while improving style faithfulness and keeping content structure coherent.
+
+## Method details
+
+### Textual inversion for style alignment
+
+Stable Diffusion uses CLIP text embeddings as conditioning. In SVD-InST, the target mural style is aligned with a special placeholder symbol, implemented as a learnable embedding vector. The report describes this as creating a "new word" for the style domain.
+
+The implementation follows the InST idea of image-aware conditioning:
+
+- the style image is encoded by a CLIP image encoder
+- multi-layer attention extracts key style information
+- the learned embedding is optimized so the diffusion model can generate images consistent with that style
+
+### Singular-value fine-tuning
+
+For a pretrained weight matrix `W`, the report formulates the update as:
+
+```text
+W = U Sigma V^T
+W_delta = U Sigma_delta V^T
+Sigma_delta = diag(ReLU(sigma + delta))
+```
+
+Only the singular values are updated during training, while `U` and `V^T` remain frozen. In code, this behavior is implemented in `SVDmodel.py`, where each wrapped layer stores a trainable `delta` and reconstructs the updated weight at forward time.
+
+### Optimization view
+
+The report separates the optimization into two parts:
+
+- **textual embedding optimization** for the learned style token
+- **spectral shift optimization** for the singular values of the latent diffusion model
+
+This makes the model a hybrid of personalization-style conditioning and parameter-efficient diffusion fine-tuning.
+
+## Related work
+
+The report positions SVD-InST against several families of methods:
+
+- **Diffusion models**: DDPM, Latent Diffusion Models, Stable Diffusion
+- **Stable Diffusion fine-tuning methods**: DreamBooth, Textual Inversion, Hyper-Networks, LoRA, SVDiff
+- **Style transfer baselines**: CycleGAN, StarGAN, BalaGAN, StyTR-2, InST, ArtFusion
+
+Among these, the closest inspirations are:
+
+- **InST** for inversion-based style transfer with diffusion models
+- **SVDiff** for compact fine-tuning in the singular-value space
 
 ## Experimental results
 
@@ -52,6 +110,35 @@ Reported quantitative results from the project report:
 | SVD-InST (ours) | **125.1** | **0.54** |
 
 Lower FID indicates better distributional quality. The report shows that SVD-InST achieves the best FID among the compared methods while keeping LPIPS at a level similar to or slightly better than InST.
+
+Additional observations reported by the team:
+
+- CycleGAN performs strongly for unpaired domain transfer, but does not naturally provide diverse outputs for the same input.
+- StarGAN was found to overfit more easily on this dataset.
+- StyTR-2 produced visually reasonable results, but a simplified version of the architecture was less robust than the full model.
+- BalaGAN was considered less suitable for this task because it is more oriented toward attribute manipulation than pure artistic style transfer.
+
+## Reported training and evaluation protocol
+
+The report describes the following protocol for SVD-InST:
+
+- initialize the latent diffusion part from **Stable Diffusion v1.4**
+- initialize the text/image encoder side from the default pretrained **CLIP** weights
+- fine-tune the learned CLIP embedding and the singular values of the diffusion model
+- after training, save the learned embedding and the singular-value updates as separate artifacts
+- during evaluation, generate **10 images for each test content image** with different random seeds
+- the report evaluates generation quality using **FID** and **LPIPS**
+
+For the experiments reported in the paper, inference was run with **strength = 0.8** for both InST and SVD-InST.
+
+## Parameter efficiency
+
+The report states that:
+
+- the full SVD-InST model is based on a roughly **1.5B-parameter** Stable Diffusion system
+- only about **3.7M parameters are trainable**
+
+This matches the intended motivation of SVDiff-style adaptation: keep most pretrained weights frozen and update only a compact parameter subset.
 
 ## Repository layout
 
@@ -189,6 +276,8 @@ This script:
 
 The batch script generates multiple outputs for each input content image, matching the evaluation workflow described in the report.
 
+If you want to reproduce the evaluation procedure in the report, generate 10 outputs per test image with different seeds and use `strength = 0.8`.
+
 ### Single-image example
 
 For a single content image workflow, use `svdinst.py`.
@@ -216,6 +305,20 @@ If you prefer an interactive workflow, `InST.ipynb` contains a notebook version 
 - Project report: `17_苏展_吴舒文_运嘉盛.pdf`
 - Additional report file: `Report.pdf`
 - Demo video: https://www.bilibili.com/video/BV1hg4y1r7z4
+
+## References
+
+The project report cites the following representative works:
+
+1. Denoising Diffusion Probabilistic Models
+2. High-Resolution Image Synthesis with Latent Diffusion Models
+3. Unpaired Image-to-Image Translation using Cycle-Consistent Adversarial Networks
+4. StarGAN: Unified Generative Adversarial Networks for Multi-Domain Image-to-Image Translation
+5. BalaGAN: Image Translation Between Imbalanced Domains via Cross-Modal Transfer
+6. Inversion-Based Style Transfer with Diffusion Models
+7. ArtFusion: Controllable Arbitrary Style Transfer using Dual Conditional Latent Diffusion Models
+8. SVDiff: Compact Parameter Space for Diffusion Fine-Tuning
+9. StyTr2: Image Style Transfer with Transformers
 
 ## License
 
